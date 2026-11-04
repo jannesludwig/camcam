@@ -81,3 +81,11 @@ html, body {
 #help td:last-child { color: var(--dim); }
 #help-close { margin-top: 20px; font-size: 9px; color: var(--dim); cursor: pointer; text-align: right; }
 #help-close:hover { color: var(--fg); }
+
+/* recording indicator lives in the DOM so it is not burnt into the video */
+#rec {
+  position: fixed; right: 22px; bottom: 36px; font-size: 10px; letter-spacing: 0.2em;
+  color: #ff5050; opacity: 0; pointer-events: none;
+}
+body.recording #rec { opacity: 0.85; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }

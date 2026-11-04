@@ -16,7 +16,6 @@ import { SCALES, INTERVALS, Quantizer, midiToHz } from './music.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
-const DEBUG = new URLSearchParams(location.search).has('debug');
 
 // ------------------------------------------------------------------ state
 
@@ -459,4 +458,3 @@ stage.addEventListener('pointerdown', () => start());
 resize();
 loadVisuals();
 requestAnimationFrame(frame);
-if (DEBUG) document.body.classList.add('debug');
