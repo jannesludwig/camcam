@@ -342,7 +342,8 @@ export class Visuals {
     fu.uTime.value = t;
     fu.uFlash.value = this.flash;
     fu.uGlitch.value = this.glitch;
-    this.afterimage.uniforms.damp.value = look.damp;
+    // persistence per frame, made frame-rate independent (tuned at 60 fps)
+    this.afterimage.uniforms.damp.value = Math.pow(look.damp, Math.min(4, dt * 60));
     this.bloom.strength = look.bloom * (0.85 + level * 0.3);
 
     this.composer.render(dt);

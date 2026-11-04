@@ -85,10 +85,6 @@ export class Hud {
 
     // ---- bottom-right: system
     this.text(`TRK ${s.trackFps.toFixed(0).padStart(2)}FPS ${s.detectMs.toFixed(1)}MS ${s.delegate}   GFX ${s.fps.toFixed(0)}FPS`, R, h - m, 0.25, 'right');
-    if (s.recording) {
-      const blink = Math.floor(performance.now() / 500) % 2;
-      this.text(`● REC ${s.recTime}`, R, h - m - lh, blink ? 0.9 : 0.5, 'right', 10, '255,80,80');
-    }
 
     // ---- pitch ruler on the right edge
     this.drawRuler(s);

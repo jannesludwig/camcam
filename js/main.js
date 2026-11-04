@@ -20,11 +20,12 @@ const DEBUG = new URLSearchParams(location.search).has('debug');
 
 // ------------------------------------------------------------------ state
 
+// glide time constants (s): `scale` between quantised notes, `free` in continuous mode
 const GLIDES = [
-  { label: 'TIGHT', tau: 0.015 },
-  { label: 'SOFT', tau: 0.06 },
-  { label: 'SLOW', tau: 0.16 },
-  { label: 'LONG', tau: 0.42 },
+  { label: 'TIGHT', scale: 0.015, free: 0.01 },
+  { label: 'SOFT', scale: 0.06, free: 0.02 },
+  { label: 'SLOW', scale: 0.16, free: 0.06 },
+  { label: 'LONG', scale: 0.42, free: 0.16 },
 ];
 
 const RANGES = {
@@ -158,8 +159,8 @@ function mapControls(hands, t) {
   c.motion += (sp - c.motion) * 0.2;
 
   // glide: free mode stays tight (theremin), scale modes use the chosen glide
-  const g = GLIDES[app.glideIdx].tau;
-  c.glide = steps ? g : Math.min(g, 0.03) * 0.8 + 0.008;
+  const g = GLIDES[app.glideIdx];
+  c.glide = steps || mode === 'pulse' ? g.scale : g.free;
   audio.update(c);
 }
 
@@ -270,6 +271,7 @@ function frame(now) {
   visuals?.render(dt, { wave, level: audio.level, ctl: app.ctl, mode: app.mode, events: vEvents, layers: app.layers });
   hud.draw(hudState(), toScreen);
   recorder?.frame();
+  if (recorder?.recording) $('#rec').textContent = '● REC ' + recorder.elapsed();
 }
 
 function hudState() {

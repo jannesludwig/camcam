@@ -117,9 +117,9 @@ class FMVoice {
   setTimbre(t, now, tau = 0.04) {
     t = clamp(t, 0, 1);
     this.index.gain.setTargetAtTime(0.04 + t * t * 1.6, now, tau);
-    this.grit.gain.setTargetAtTime(t * 0.5, now, tau);
-    this.clean.gain.setTargetAtTime(1 - t * 0.45, now, tau);
-    this.drive.gain.setTargetAtTime(1.5 + t * 5, now, tau);
+    this.grit.gain.setTargetAtTime(t * t * 0.45, now, tau);
+    this.clean.gain.setTargetAtTime(1 - t * t * 0.4, now, tau);
+    this.drive.gain.setTargetAtTime(1.2 + t * 3.5, now, tau);
   }
 }
 
@@ -226,8 +226,8 @@ export class AudioEngine {
     this.noise = noiseBuffer(ctx, 2);
 
     // ---------------- master chain
-    this.master = new GainNode(ctx, { gain: 0.8 });
-    this.limiter = new DynamicsCompressorNode(ctx, { threshold: -10, knee: 4, ratio: 16, attack: 0.002, release: 0.12 });
+    this.master = new GainNode(ctx, { gain: 0.56 });
+    this.limiter = new DynamicsCompressorNode(ctx, { threshold: -5, knee: 2, ratio: 20, attack: 0.002, release: 0.15 });
     this.softclip = new WaveShaperNode(ctx, { curve: tanhCurve(4096, 1.1), oversample: '4x' });
     this.out = new GainNode(ctx, { gain: 0.92 });
     this.master.connect(this.limiter).connect(this.softclip).connect(this.out).connect(ctx.destination);
