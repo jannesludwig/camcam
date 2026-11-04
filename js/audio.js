@@ -350,6 +350,7 @@ export class AudioEngine {
       pulse: { delay: (60 / this.seq.bpm) * 0.75, fb: 0.3, dOut: 0.26, verb: 0.22, pad: 0, sub: 0.5 },
       drone: { delay: 0.9, fb: 0.55, dOut: 0.38, verb: 0.7, pad: 1, sub: 0.7 },
     }[mode];
+    this.modeP = P; // base values; the space gesture scales them in update()
     this.delay.delayTime.setTargetAtTime(P.delay, now, 0.3);
     this.delayFb.gain.setTargetAtTime(P.fb, now, 0.3);
     this.delayOut.gain.setTargetAtTime(P.dOut, now, 0.3);
@@ -390,6 +391,16 @@ export class AudioEngine {
     const still = c.still || 0;
     this.lead.setTimbre(c.timbre * (1 - 0.95 * still), now, still > 0.05 ? 0.6 : drone ? 0.5 : 0.04);
     this.deepAmp.gain.setTargetAtTime(Math.pow(still, 1.5) * 0.6, now, still > 0.05 ? 1.2 : 0.25);
+
+    // space (hand distance): dry & close ↔ long dark delay + reverb tail
+    const sp = c.space ?? 0.3;
+    const P = this.modeP;
+    this.reverbOut.gain.setTargetAtTime(Math.min(0.95, P.verb * (0.15 + 2.0 * sp)), now, 0.25);
+    this.delayFb.gain.setTargetAtTime(Math.min(0.7, P.fb * (0.35 + 1.4 * sp)), now, 0.25);
+    this.delayOut.gain.setTargetAtTime(P.dOut * (0.25 + 1.5 * sp), now, 0.25);
+    this.delayLP.frequency.setTargetAtTime(2300 - 1400 * sp, now, 0.3);
+    this.toneVerbSend.gain.setTargetAtTime(0.08 + 0.6 * sp, now, 0.25);
+    this.toneDelaySend.gain.setTargetAtTime(0.04 + 0.4 * sp, now, 0.25);
 
     // energy: fast movement sprays short gated noise bursts and glitch clicks
     const en = c.energy || 0;

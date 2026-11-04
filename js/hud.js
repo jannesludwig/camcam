@@ -68,7 +68,7 @@ export class Hud {
     this.text(`${s.hz.toFixed(2).padStart(7, ' ')} HZ`, R, m + 10, s.sounding ? 0.85 : 0.3, 'right', 15);
     this.text(`${nl.name.padEnd(3, ' ')} ${nl.cents.padStart(3, ' ')}c   MIDI ${midi.toFixed(2)}`, R, m + 10 + lh * 1.4, 0.45, 'right');
     this.text(`TIMBRE ${s.timbre.toFixed(3)}  VOL ${s.volume.toFixed(3)}  LPF ${(s.cutoff / 1000).toFixed(2)}k`, R, m + 10 + lh * 2.5, 0.3, 'right');
-    this.text(`ENERGY ${s.energy.toFixed(2)}  STILL ${s.still.toFixed(2)}`, R, m + 10 + lh * 3.6, 0.3, 'right');
+    this.text(`ENERGY ${s.energy.toFixed(2)}  STILL ${s.still.toFixed(2)}  SPACE ${s.space.toFixed(2)}`, R, m + 10 + lh * 3.6, 0.3, 'right');
     if (s.v2) this.text(`VOICE2 ${s.v2}`, R, m + 10 + lh * 4.7, 0.3, 'right');
 
     // ---- bottom-left: coordinates + layers

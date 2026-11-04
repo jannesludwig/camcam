@@ -192,6 +192,7 @@ export class Visuals {
     this.final = new ShaderPass(FinalShader);
     this.composer.addPass(this.final);
 
+    this.zoom = 1;
     this.mode = 'theremin';
     this.look = { ...MODE_LOOK.theremin };
     this.time = 0;
@@ -300,6 +301,14 @@ export class Visuals {
     const level = Math.min(1, s.level * 2);
     const energy = s.ctl.energy || 0;
     const still = s.ctl.still || 0;
+    const space = s.ctl.space ?? 0.3;
+    // space: spread hands → the whole scene gently zooms out
+    const zt = 1 - 0.16 * Math.max(0, Math.min(1, (space - 0.3) / 0.7));
+    this.zoom += (zt - this.zoom) * (1 - Math.exp(-dt * 3));
+    if (Math.abs(this.camera.zoom - this.zoom) > 1e-4) {
+      this.camera.zoom = this.zoom;
+      this.camera.updateProjectionMatrix();
+    }
     const wave = s.wave;
 
     // ---- camera ghost
@@ -346,7 +355,7 @@ export class Visuals {
         this.prevTips[i][k * 2 + 1] = y;
       }
     }
-    this.trails.update(tips, wave, level, look.trails, { energy, still, length: still });
+    this.trails.update(tips, wave, level, look.trails, { energy, still, length: Math.max(still, space * space) });
 
     // ---- strings between matching fingertips of left + right
     let pairs = null;
@@ -414,7 +423,7 @@ export class Visuals {
     fu.uGlitch.value = this.glitch;
     // persistence per frame, made frame-rate independent (tuned at 60 fps)
     // stillness: longer, softer glow, less bloom, deeper vignette — sinking into depth
-    const damp = look.damp + (0.94 - look.damp) * still * 0.7;
+    const damp = look.damp + (0.95 - look.damp) * Math.max(still * 0.7, Math.max(0, space - 0.3) * 0.9);
     this.afterimage.uniforms.damp.value = Math.pow(damp, Math.min(4, dt * 60));
     this.bloom.strength = look.bloom * (0.85 + level * 0.3) * (this.symN ? 0.65 : 1) * (1 - 0.3 * still);
     fu.uDepth.value = still;

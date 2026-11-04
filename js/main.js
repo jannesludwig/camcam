@@ -45,7 +45,7 @@ const app = {
   everSeen: false,
   lastSeen: -10,
   // latest control values (for HUD / visuals)
-  ctl: { present: false, hz: 110, timbre: 0, volume: 0.7, filter: 0.72, pan: 0, cutoff: 3000, v2: null, motion: 0, energy: 0, still: 0 },
+  ctl: { present: false, hz: 110, timbre: 0, volume: 0.7, filter: 0.72, pan: 0, cutoff: 3000, v2: null, motion: 0, energy: 0, still: 0, space: 0.3 },
   history: [], // recent {t, hz, timbre} of the lead, to freeze the pre-fist tone
   layers: [], // frozen drone frequencies (mirror of audio.drones)
   pitchMidi: 45,
@@ -150,8 +150,11 @@ function mapControls(hands, t) {
     const iv = INTERVALS[k];
     const ratio = Math.pow(2, -iv.semi / 12) * (iv.semi === 0 ? 1.0035 : 1);
     c.v2 = { on: true, hz: c.hz * ratio, label: iv.label, k };
+    // space: hands close = dry & intimate, spread wide = long dark tail
+    c.space += (clamp01((d - 0.3) / 0.9) - c.space) * 0.12;
   } else {
     c.v2 = null;
+    c.space += (0.3 - c.space) * 0.03; // one hand: relax to a neutral, fairly dry space
   }
 
   // motion energy (drone "air", particles)
@@ -278,7 +281,12 @@ function frame(now) {
   const wave = audio.waveform();
 
   visuals?.render(dt, { wave, level: audio.level, ctl: app.ctl, mode: app.mode, events: vEvents, layers: app.layers });
-  hud.draw(hudState(), toScreen);
+  // HUD markers follow the scene's zoom (space gesture)
+  const z = visuals?.zoom ?? 1;
+  hud.draw(hudState(), z === 1 ? toScreen : (x, y) => {
+    const p = toScreen(x, y);
+    return { x: innerWidth / 2 + (p.x - innerWidth / 2) * z, y: innerHeight / 2 + (p.y - innerHeight / 2) * z };
+  });
   recorder?.frame();
   if (recorder?.recording) $('#rec').textContent = '● REC ' + recorder.elapsed();
 }
@@ -298,6 +306,7 @@ function hudState() {
     timbre: c.timbre,
     energy: c.energy,
     still: c.still,
+    space: c.space,
     volume: c.volume,
     cutoff: c.cutoff,
     v2: c.v2 && app.mode !== 'pulse' ? c.v2.label : null,
