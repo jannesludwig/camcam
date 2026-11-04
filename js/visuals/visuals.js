@@ -72,6 +72,58 @@ const FinalShader = {
     }`,
 };
 
+/**
+ * Kaleidoscopic symmetry (K): the rendered scene is summed with mirrored /
+ * rotated copies of itself around the screen centre — additive light, so the
+ * hands become a living mandala. 2 = left/right mirror, 4 = both axes,
+ * 6 = three rotations (120°) each with its mirror image.
+ */
+const SymmetryShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uN: { value: 0 },
+    uMix: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform int uN;
+    uniform float uMix;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    vec3 sum; vec3 mx;
+    void tap(vec2 p) {
+      vec2 uv = p / uRes + 0.5;
+      if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return;
+      vec3 c = texture2D(tDiffuse, uv).rgb * 0.72; // copies a little dimmer than the original
+      sum += c; mx = max(mx, c);
+    }
+    vec2 rot(vec2 p, float a) { float c = cos(a), s = sin(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
+    void main() {
+      vec3 base = texture2D(tDiffuse, vUv).rgb;
+      if (uN < 2 || uMix < 0.002) { gl_FragColor = vec4(base, 1.0); return; }
+      vec2 p = (vUv - 0.5) * uRes; // px from centre
+      sum = vec3(0.0); mx = base;
+      if (uN == 2) {
+        tap(vec2(-p.x, p.y));
+      } else if (uN == 4) {
+        tap(vec2(-p.x, p.y)); tap(vec2(p.x, -p.y)); tap(-p);
+      } else {
+        tap(vec2(-p.x, p.y));
+        for (int k = 1; k < 3; k++) {
+          vec2 r = rot(p, float(k) * 2.0943951);
+          tap(r); tap(vec2(-r.x, r.y));
+        }
+      }
+      // max keeps overlaps restrained, a little of the sum keeps it luminous
+      vec3 sym = max(base, mx) + 0.1 * sum;
+      gl_FragColor = vec4(mix(base, sym, uMix), 1.0);
+    }`,
+};
+
 const MODE_LOOK = {
   theremin: { damp: 0.8, ambient: 0.05, swirl: 0, trails: 1, strings: 1, bloom: 0.7 },
   pulse: { damp: 0.62, ambient: 0.03, swirl: 0, trails: 0.8, strings: 1, bloom: 0.65 },
@@ -128,6 +180,10 @@ export class Visuals {
     // post-processing
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.symmetry = new ShaderPass(SymmetryShader);
+    this.composer.addPass(this.symmetry);
+    this.symN = 0;
+    this.symMix = 0;
     this.afterimage = new AfterimagePass(0.8);
     this.composer.addPass(this.afterimage);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.38, 0.12);
@@ -164,11 +220,18 @@ export class Visuals {
     this.camera.bottom = H;
     this.camera.updateProjectionMatrix();
     this.final.uniforms.uRes.value.set(W * this.pxRatio, H * this.pxRatio);
+    this.symmetry.uniforms.uRes.value.set(W, H);
     this.video.classList.add('in-gl');
   }
 
   setMode(mode) {
     this.mode = mode;
+  }
+
+  /** 0 (off), 2, 4 or 6-fold symmetry; new copies fade in. */
+  setSymmetry(n) {
+    this.symN = n;
+    this.symMix = 0;
   }
 
   setCamLevel(l) {
@@ -338,13 +401,17 @@ export class Visuals {
     // ---- post
     this.flash *= Math.exp(-dt * 14);
     this.glitch *= Math.exp(-dt * 3.2);
+    this.symMix = Math.min(1, this.symMix + dt * 1.5);
+    this.symmetry.uniforms.uN.value = this.symN;
+    this.symmetry.uniforms.uMix.value = this.symN ? this.symMix : 0;
+    this.symmetry.enabled = this.symN > 0;
     const fu = this.final.uniforms;
     fu.uTime.value = t;
     fu.uFlash.value = this.flash;
     fu.uGlitch.value = this.glitch;
     // persistence per frame, made frame-rate independent (tuned at 60 fps)
     this.afterimage.uniforms.damp.value = Math.pow(look.damp, Math.min(4, dt * 60));
-    this.bloom.strength = look.bloom * (0.85 + level * 0.3);
+    this.bloom.strength = look.bloom * (0.85 + level * 0.3) * (this.symN ? 0.65 : 1);
 
     this.composer.render(dt);
     this.adapt(dt);

@@ -39,6 +39,7 @@ const app = {
   scaleIdx: 0,
   glideIdx: 1,
   camLevel: 1, // 0 off, 1 almost invisible, 2 dim
+  symmetry: 0, // 0 off, 2, 4, 6-fold
   inputMode: 'none', // 'camera' | 'mouse'
   cameraOk: false,
   everSeen: false,
@@ -375,6 +376,10 @@ addEventListener('keydown', async (e) => {
   } else if (k === 'c') {
     setCamLevel((app.camLevel + 1) % 3);
     toast('CAMERA ' + ['OFF', 'GHOST', 'DIM'][app.camLevel]);
+  } else if (k === 'k') {
+    app.symmetry = { 0: 2, 2: 4, 4: 6, 6: 0 }[app.symmetry];
+    visuals?.setSymmetry(app.symmetry);
+    toast(app.symmetry ? `SYMMETRY ${app.symmetry}` : 'SYMMETRY OFF');
   } else if (k === 'm') {
     const ok = setInput(app.inputMode === 'mouse' ? 'camera' : 'mouse');
     toast(ok ? 'INPUT ' + app.inputMode.toUpperCase() : 'NO CAMERA');
