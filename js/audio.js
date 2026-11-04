@@ -295,6 +295,15 @@ export class AudioEngine {
     this.sub.connect(this.subAmp).connect(this.leadGate);
     this.sub.start(now);
 
+    // stillness layer: two octaves below the lead, fades in when the hands rest
+    this.deep = new OscillatorNode(ctx, { type: 'sine', frequency: 0 });
+    this.deepQuarter = new GainNode(ctx, { gain: 0.25 });
+    this.deepHP = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 28, Q: 0.6 });
+    this.deepAmp = new GainNode(ctx, { gain: 0 });
+    this.lead.freq.connect(this.deepQuarter).connect(this.deep.frequency);
+    this.deep.connect(this.deepHP).connect(this.deepAmp).connect(this.leadGate);
+    this.deep.start(now);
+
     // pad partials (only audible in DRONE mode)
     this.pad = new GainNode(ctx, { gain: 0 });
     this.pad.connect(this.leadGate);
@@ -377,7 +386,19 @@ export class AudioEngine {
       }
       this.leadHz = c.hz;
     }
-    this.lead.setTimbre(c.timbre, now, drone ? 0.5 : 0.04);
+    // stillness purifies the tone (→ sine) and lets the deep layer rise slowly
+    const still = c.still || 0;
+    this.lead.setTimbre(c.timbre * (1 - 0.95 * still), now, still > 0.05 ? 0.6 : drone ? 0.5 : 0.04);
+    this.deepAmp.gain.setTargetAtTime(Math.pow(still, 1.5) * 0.6, now, still > 0.05 ? 1.2 : 0.25);
+
+    // energy: fast movement sprays short gated noise bursts and glitch clicks
+    const en = c.energy || 0;
+    if (c.present && en > 0.12) {
+      const p = en * en * 0.35;
+      const v = 0.3 + 0.7 * (c.volume ?? 0.7);
+      if (Math.random() < p) this.noiseHit(now + 0.002, 0.003 + Math.random() * 0.02, (0.04 + 0.12 * en) * v, 2000 + Math.random() * 7000);
+      if (Math.random() < p * 0.45) this.click(this.leadHz * [1, 2, 4][(Math.random() * 3) | 0], Math.random() * 1.6 - 0.8, 0.3 * en * v);
+    }
 
     // ---- gate: lead sustains in theremin/drone, silent in pulse (the sequencer plays)
     const gateOn = c.present && !pulse;

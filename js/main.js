@@ -45,7 +45,7 @@ const app = {
   everSeen: false,
   lastSeen: -10,
   // latest control values (for HUD / visuals)
-  ctl: { present: false, hz: 110, timbre: 0, volume: 0.7, filter: 0.72, pan: 0, cutoff: 3000, v2: null, motion: 0 },
+  ctl: { present: false, hz: 110, timbre: 0, volume: 0.7, filter: 0.72, pan: 0, cutoff: 3000, v2: null, motion: 0, energy: 0, still: 0 },
   history: [], // recent {t, hz, timbre} of the lead, to freeze the pre-fist tone
   layers: [], // frozen drone frequencies (mirror of audio.drones)
   pitchMidi: 45,
@@ -157,6 +157,15 @@ function mapControls(hands, t) {
   // motion energy (drone "air", particles)
   const sp = (R ? R.speed : 0) + (L ? L.speed : 0);
   c.motion += (sp - c.motion) * 0.2;
+
+  // energy ↔ stillness: fast attack / slow release energy; stillness builds
+  // up over ~3.5 s of (nearly) motionless hands and breaks quickly on movement
+  const dt = Math.min(0.1, Math.max(0.001, t - (app.lastCtlT ?? t)));
+  app.lastCtlT = t;
+  const e = clamp01((c.motion - 0.3) / 1.4);
+  c.energy += (e - c.energy) * (e > c.energy ? 0.35 : 0.05);
+  if ((R || L) && c.motion < 0.12) c.still = Math.min(1, c.still + dt / 3.5);
+  else c.still = Math.max(0, c.still - dt * (R || L ? 1.6 : 0.5));
 
   // glide: free mode stays tight (theremin), scale modes use the chosen glide
   const g = GLIDES[app.glideIdx];
@@ -287,6 +296,8 @@ function hudState() {
     hz: c.hz,
     sounding: c.present && c.volume > 0.02,
     timbre: c.timbre,
+    energy: c.energy,
+    still: c.still,
     volume: c.volume,
     cutoff: c.cutoff,
     v2: c.v2 && app.mode !== 'pulse' ? c.v2.label : null,

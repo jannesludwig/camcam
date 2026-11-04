@@ -30,6 +30,7 @@ const FinalShader = {
     uFlash: { value: 0 },
     uGlitch: { value: 0 },
     uGrain: { value: 0.045 },
+    uDepth: { value: 0 },
     uRes: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: /* glsl */ `
@@ -37,7 +38,7 @@ const FinalShader = {
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float uTime, uFlash, uGlitch, uGrain;
+    uniform float uTime, uFlash, uGlitch, uGrain, uDepth;
     uniform vec2 uRes;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -67,7 +68,7 @@ const FinalShader = {
       c = mix(c, vec3(1.0), clamp(uFlash, 0.0, 1.0));
       c += (hash(vUv * uRes + fract(uTime * 13.7) * 91.0) - 0.5) * uGrain;
       vec2 q = vUv - 0.5;
-      c *= 1.0 - dot(q, q) * 0.7;
+      c *= (1.0 - dot(q, q) * (0.7 + 1.6 * uDepth)) * (1.0 - 0.18 * uDepth);
       gl_FragColor = vec4(c, 1.0);
     }`,
 };
@@ -297,6 +298,8 @@ export class Visuals {
     const L = MODE_LOOK[this.mode];
     for (const k in L) look[k] += (L[k] - look[k]) * (1 - Math.exp(-dt * 2));
     const level = Math.min(1, s.level * 2);
+    const energy = s.ctl.energy || 0;
+    const still = s.ctl.still || 0;
     const wave = s.wave;
 
     // ---- camera ghost
@@ -337,13 +340,13 @@ export class Visuals {
           const vx = (x - pv[k * 2]) / Math.max(dt, 1e-3);
           const vy = (y - pv[k * 2 + 1]) / Math.max(dt, 1e-3);
           const sp = Math.hypot(vx, vy);
-          if (sp > 60 && sp < 8000) this.particles.shed(x, y, vx, vy, sp, dt, k === 1 ? 1.4 : 0.7);
+          if (sp > 60 && sp < 8000) this.particles.shed(x, y, vx, vy, sp, dt, (k === 1 ? 1.4 : 0.7) * (0.5 + 2.5 * energy));
         }
         this.prevTips[i][k * 2] = x;
         this.prevTips[i][k * 2 + 1] = y;
       }
     }
-    this.trails.update(tips, wave, level, look.trails);
+    this.trails.update(tips, wave, level, look.trails, { energy, still, length: still });
 
     // ---- strings between matching fingertips of left + right
     let pairs = null;
@@ -410,8 +413,11 @@ export class Visuals {
     fu.uFlash.value = this.flash;
     fu.uGlitch.value = this.glitch;
     // persistence per frame, made frame-rate independent (tuned at 60 fps)
-    this.afterimage.uniforms.damp.value = Math.pow(look.damp, Math.min(4, dt * 60));
-    this.bloom.strength = look.bloom * (0.85 + level * 0.3) * (this.symN ? 0.65 : 1);
+    // stillness: longer, softer glow, less bloom, deeper vignette — sinking into depth
+    const damp = look.damp + (0.94 - look.damp) * still * 0.7;
+    this.afterimage.uniforms.damp.value = Math.pow(damp, Math.min(4, dt * 60));
+    this.bloom.strength = look.bloom * (0.85 + level * 0.3) * (this.symN ? 0.65 : 1) * (1 - 0.3 * still);
+    fu.uDepth.value = still;
 
     this.composer.render(dt);
     this.adapt(dt);
