@@ -18,6 +18,7 @@ import { HandDust } from './handDust.js';
 import { Trails, Strings, LineBatch } from './scope.js';
 import { Particles } from './particles.js';
 import { Orbits } from './orbits.js';
+import { DustField } from './dustField.js';
 import { TIPS } from '../hands.js';
 
 const WHITE = new THREE.Color(0xf2f6f8);
@@ -126,8 +127,8 @@ const SymmetryShader = {
 };
 
 const MODE_LOOK = {
-  theremin: { damp: 0.8, ambient: 0.05, swirl: 0, trails: 1, strings: 1, bloom: 0.7 },
-  pulse: { damp: 0.62, ambient: 0.03, swirl: 0, trails: 0.8, strings: 1, bloom: 0.65 },
+  theremin: { damp: 0.8, ambient: 0.02, swirl: 0, trails: 1, strings: 1, bloom: 0.7 },
+  pulse: { damp: 0.62, ambient: 0.015, swirl: 0, trails: 0.8, strings: 1, bloom: 0.65 },
   drone: { damp: 0.92, ambient: 0.17, swirl: 1, trails: 0.55, strings: 0.6, bloom: 0.85 },
 };
 
@@ -170,6 +171,7 @@ export class Visuals {
     this.camOpacity = 0;
     this.camTarget = 0.05;
 
+    this.dustField = new DustField(this.scene, WHITE, ACCENT);
     this.orbits = new Orbits(this.scene, WHITE, ACCENT);
     this.particles = new Particles(this.scene, WHITE, ACCENT);
     this.strings = new Strings(this.scene, WHITE, ACCENT);
@@ -379,6 +381,22 @@ export class Visuals {
       attract.push({ x: p.x, y: p.y, r: 1 });
     }
     this.particles.update(dt, this.pxRatio, W, H, look.ambient * (0.6 + level), look.swirl, attract);
+
+    // ---- reactive 3D dust field: parallax with the hands, flares on hits, pushed by energy
+    let hc = null;
+    if (attract.length) {
+      hc = { x: 0, y: 0 };
+      for (const p of attract) {
+        hc.x += p.x / attract.length;
+        hc.y += p.y / attract.length;
+      }
+    }
+    for (const e of s.events) {
+      if (e.type === 'click') this.dustField.hit(0.45);
+      else if (e.type === 'clap') this.dustField.hit(1);
+      else if (e.type === 'step' && e.sub) this.dustField.hit(0.8);
+    }
+    this.dustField.update(dt, W, H, this.pxRatio, hc, level, energy);
 
     // ---- pulse mode: scan lines and barcode bars on sequencer hits
     for (const e of s.events) {
