@@ -47,7 +47,8 @@ export class Hud {
     const { w, h } = this;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     g.clearRect(0, 0, w, h);
-    if (!s.started) return;
+    if (!s.started || s.fade < 0.01) return;
+    g.globalAlpha = s.fade; // readouts fade out while playing (auto-hide)
     const m = 22; // margin
     const lh = 14;
 

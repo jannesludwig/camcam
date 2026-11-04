@@ -267,6 +267,10 @@ window.AETHER.feed = onTrackingResult; // lets tests inject synthetic hands
 // ------------------------------------------------------------------ render loop
 
 let lastFrame = performance.now();
+// auto-hide: hints + readouts fade out after 5 s without keyboard input
+const IDLE_MS = 5000;
+let lastKey = performance.now();
+let hudFade = 1;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
@@ -281,6 +285,9 @@ function frame(now) {
   const wave = audio.waveform();
 
   visuals?.render(dt, { wave, level: audio.level, ctl: app.ctl, mode: app.mode, events: vEvents, layers: app.layers });
+  const idle = app.started && app.everSeen && now - lastKey > IDLE_MS && !$('#help').classList.contains('show');
+  hudFade += ((idle ? 0 : 1) - hudFade) * (1 - Math.exp(-dt * (idle ? 1.5 : 8)));
+  document.body.classList.toggle('idle', idle);
   // HUD markers follow the scene's zoom (space gesture)
   const z = visuals?.zoom ?? 1;
   hud.draw(hudState(), z === 1 ? toScreen : (x, y) => {
@@ -307,6 +314,7 @@ function hudState() {
     energy: c.energy,
     still: c.still,
     space: c.space,
+    fade: hudFade,
     volume: c.volume,
     cutoff: c.cutoff,
     v2: c.v2 && app.mode !== 'pulse' ? c.v2.label : null,
@@ -380,6 +388,7 @@ function setInput(mode) {
 }
 
 addEventListener('keydown', async (e) => {
+  lastKey = performance.now();
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (!app.started) return start();
   const k = e.key.toLowerCase();
@@ -459,6 +468,7 @@ async function loadVisuals() {
 async function start() {
   if (app.started) return;
   app.started = true;
+  lastKey = performance.now();
   $('#onboard').classList.add('started');
   await audio.init();
   hint('raise your hands');

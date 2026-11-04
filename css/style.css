@@ -89,3 +89,7 @@ html, body {
 }
 body.recording #rec { opacity: 0.85; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.35; } }
+
+/* auto-hide: after 5 s without keys the screen is pure visuals */
+#corner-hint, #onboard { transition: opacity 1.4s ease; }
+body.idle #corner-hint, body.idle #onboard, body.idle #toast { opacity: 0 !important; }
