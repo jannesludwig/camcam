@@ -1,0 +1,91 @@
+/* AETHER — almost no UI. Black, monospace, low opacity. */
+:root {
+  --fg: #e8eef2;
+  --dim: rgba(232, 238, 242, 0.38);
+  --accent: #96dcff;
+  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+#stage { position: fixed; inset: 0; }
+#stage.mouse { cursor: crosshair; }
+
+/* mirrored, desaturated, nearly invisible camera image */
+#video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  filter: grayscale(1) contrast(1.4) brightness(0.55);
+  opacity: 0.05;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+#video[data-level="0"] { opacity: 0; }
+#video[data-level="2"] { opacity: 0.22; }
+/* once WebGL draws the camera into the scene the DOM video is hidden */
+#video.in-gl { opacity: 0 !important; }
+
+#gl, #hud { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#hud { pointer-events: none; }
+
+#onboard {
+  position: fixed; left: 0; right: 0; top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 1.4s ease;
+}
+#onboard.started { pointer-events: none; cursor: default; }
+#onboard.hidden { opacity: 0; }
+#hint { font-size: 12px; letter-spacing: 0.32em; text-transform: lowercase; opacity: 0.75; animation: breathe 3.2s ease-in-out infinite; }
+#hint-sub { margin-top: 14px; font-size: 9px; letter-spacing: 0.2em; color: var(--dim); opacity: 0.6; min-height: 1em; }
+@keyframes breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
+
+#toast {
+  position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+  font-size: 10px; letter-spacing: 0.35em; color: var(--accent);
+  opacity: 0; transition: opacity 0.25s; pointer-events: none;
+}
+#toast.show { opacity: 0.8; }
+
+#corner-hint {
+  position: fixed; left: 22px; bottom: 6px; font-size: 9px; color: var(--dim); opacity: 0.35; pointer-events: none;
+}
+
+#help {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.72); opacity: 0; pointer-events: none; transition: opacity 0.25s;
+}
+#help.show { opacity: 1; pointer-events: auto; }
+#help .panel { border: 1px solid rgba(255, 255, 255, 0.12); padding: 28px 34px; min-width: 460px; background: rgba(0, 0, 0, 0.6); }
+#help .title { font-size: 11px; letter-spacing: 0.3em; margin-bottom: 14px; }
+#help .title span { color: var(--dim); }
+#help .title.small { margin-top: 22px; font-size: 10px; color: var(--dim); }
+#help table { border-collapse: collapse; width: 100%; }
+#help td { padding: 3px 0; font-size: 10px; vertical-align: top; }
+#help td:first-child { color: var(--accent); opacity: 0.8; padding-right: 28px; white-space: nowrap; }
+#help td:last-child { color: var(--dim); }
+#help-close { margin-top: 20px; font-size: 9px; color: var(--dim); cursor: pointer; text-align: right; }
+#help-close:hover { color: var(--fg); }
+
+/* recording indicator lives in the DOM so it is not burnt into the video */
+#rec {
+  position: fixed; right: 22px; bottom: 36px; font-size: 10px; letter-spacing: 0.2em;
+  color: #ff5050; opacity: 0; pointer-events: none;
+}
+body.recording #rec { opacity: 0.85; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }

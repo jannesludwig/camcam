@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AETHER</title>
+  <meta name="description" content="AETHER — a webcam theremin. Play sound with your hands in the air." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="stage">
+    <!-- camera image: almost invisible; never leaves the browser -->
+    <video id="video" data-level="1" playsinline muted></video>
+    <canvas id="gl"></canvas>
+    <canvas id="hud"></canvas>
+  </div>
+
+  <div id="onboard">
+    <div id="hint">AETHER &nbsp;·&nbsp; click to enter</div>
+    <div id="hint-sub">camera + sound · runs locally · nothing is uploaded</div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="rec"></div>
+
+  <div id="help">
+    <div class="panel">
+      <div class="title">AETHER <span>// gestures</span></div>
+      <table>
+        <tr><td>right hand height</td><td>pitch</td></tr>
+        <tr><td>right hand distance</td><td>timbre · closer = grit</td></tr>
+        <tr><td>left hand height</td><td>volume</td></tr>
+        <tr><td>left hand x</td><td>filter · left = dark</td></tr>
+        <tr><td>hand distance</td><td>interval of the 2nd voice</td></tr>
+        <tr><td>pinch</td><td>click at current pitch · pulse: next pattern</td></tr>
+        <tr><td>fist</td><td>freeze tone into a drone layer (max 3)</td></tr>
+        <tr><td>both hands spread wide</td><td>hold to clear drones</td></tr>
+        <tr><td>clap / hands touch</td><td>glitch flash + sub drop</td></tr>
+      </table>
+      <div class="title small">keys</div>
+      <table class="keys">
+        <tr><td>1 2 3</td><td>theremin · pulse · drone</td></tr>
+        <tr><td>S</td><td>scale: free · minor pentatonic · dark (in)</td></tr>
+        <tr><td>G</td><td>glide amount</td></tr>
+        <tr><td>C</td><td>camera image off · ghost · dim</td></tr>
+        <tr><td>R</td><td>record video (canvas + audio)</td></tr>
+        <tr><td>M</td><td>mouse mode · click = pinch · scroll = timbre · space = fist</td></tr>
+        <tr><td>X / space</td><td>clear drones / freeze</td></tr>
+        <tr><td>F · H</td><td>fullscreen · this help</td></tr>
+      </table>
+      <div id="help-close">[ close ]</div>
+    </div>
+  </div>
+
+  <div id="corner-hint">H — help</div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
