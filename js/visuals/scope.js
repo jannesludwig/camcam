@@ -95,7 +95,7 @@ export function trigger(wave, maxSearch = 1024) {
 
 // ------------------------------------------------------------------ trails
 
-const HIST = 34; // samples of tip history (~0.7 s at 60 fps)
+const HIST = 130; // capacity of the tip history (frames)
 const RES = 120; // vertices per drawn trail
 
 class TipHistory {
@@ -103,18 +103,19 @@ class TipHistory {
     this.x = new Float32Array(HIST);
     this.y = new Float32Array(HIST);
     this.n = 0;
+    this.idle = 0;
   }
-  push(x, y) {
-    if (this.n < HIST) {
-      this.x[this.n] = x;
-      this.y[this.n] = y;
-      this.n++;
-    } else {
-      this.x.copyWithin(0, 1);
-      this.y.copyWithin(0, 1);
-      this.x[HIST - 1] = x;
-      this.y[HIST - 1] = y;
+  /** Append a point, keeping at most `max` points. */
+  push(x, y, max) {
+    const drop = this.n + 1 - max;
+    if (drop > 0) {
+      this.x.copyWithin(0, drop, this.n);
+      this.y.copyWithin(0, drop, this.n);
+      this.n -= drop;
     }
+    this.x[this.n] = x;
+    this.y[this.n] = y;
+    this.n++;
   }
   /** Retract from the tail (the beam fades when the hand is gone). */
   shrink() {
@@ -132,27 +133,42 @@ export class Trails {
     this.hist = new Map(); // key → TipHistory
     this.tmpX = new Float32Array(RES);
     this.tmpY = new Float32Array(RES);
+    this.frame = 0;
   }
 
   /**
    * @param {Array<{key:string, x:number, y:number, alive:boolean, weight:number}>} tips
    * @param {Float32Array} wave audio time-domain data
+   * @param {{energy:number, still:number, length:number}} mod
+   *   energy → sharper, jagged beams; still → soft, smooth beams;
+   *   length (0..1) → how long the beams are (stillness, space)
    */
-  update(tips, wave, level, intensity = 1) {
+  update(tips, wave, level, intensity = 1, mod = { energy: 0, still: 0, length: 0 }) {
     const b = this.batch;
     b.begin();
+    this.frame++;
     const trig = trigger(wave);
+    const { energy, still } = mod;
+    const maxN = Math.round(24 + mod.length * (HIST - 24));
+    const retractEvery = 1 + Math.round(still * 7); // still hands: beams retract very slowly
     for (const tip of tips) {
       let h = this.hist.get(tip.key);
       if (!h) this.hist.set(tip.key, (h = new TipHistory()));
-      if (tip.alive) h.push(tip.x, tip.y);
-      else {
+      if (tip.alive) {
+        // only record real movement so a resting hand keeps its last gesture as a beam
+        const moved = h.n === 0 || Math.hypot(tip.x - h.x[h.n - 1], tip.y - h.y[h.n - 1]) > 0.6;
+        if (moved) {
+          h.push(tip.x, tip.y, maxN);
+          h.idle = 0;
+        } else if (++h.idle > 8 && this.frame % retractEvery === 0) h.shrink();
+        while (h.n > maxN) h.shrink();
+      } else {
         h.shrink();
         h.shrink();
       }
       if (h.n < 3) continue;
 
-      // resample the history uniformly in time
+      // resample the history uniformly
       let len = 0;
       for (let i = 1; i < h.n; i++) len += Math.hypot(h.x[i] - h.x[i - 1], h.y[i] - h.y[i - 1]);
       if (len < 2) continue;
@@ -166,10 +182,21 @@ export class Trails {
         X[j] = h.x[i0] + (h.x[i1] - h.x[i0]) * f;
         Y[j] = h.y[i0] + (h.y[i1] - h.y[i0]) * f;
       }
+      // stillness: smooth the path (a few passes of a 3-tap average)
+      const passes = Math.round(still * 4);
+      for (let pss = 0; pss < passes; pss++) {
+        for (let j = 1; j < RES - 1; j++) {
+          X[j] = (X[j - 1] + 2 * X[j] + X[j + 1]) * 0.25;
+          Y[j] = (Y[j - 1] + 2 * Y[j] + Y[j + 1]) * 0.25;
+        }
+      }
 
       // displace along the normal by the waveform; head (j = RES-1) stays on the tip
-      const amp = tip.weight * tip.weight * (5 + 34 * Math.min(level * 2.2, 1)) * Math.min(1, len / 120) * intensity;
+      const amp = tip.weight * tip.weight * (5 + 34 * Math.min(level * 2.2, 1)) * Math.min(1, len / 120) * intensity * (1 - 0.85 * still) * (1 + energy);
+      const jag = energy * energy * 9 * tip.weight; // px of random jitter at full energy
       const step = 7; // audio samples per vertex → ~17 ms of signal along the beam
+      const alphaK = 0.7 * (1 - 0.35 * still) * (1 + 0.5 * energy);
+      const curve = 1.7 - 0.9 * still; // still → longer, softer fade towards the tail
       let px = 0;
       let py = 0;
       let pa = 0;
@@ -183,10 +210,13 @@ export class Trails {
         ty /= tl;
         const un = j / (RES - 1); // 0 tail → 1 head
         const env = Math.min(1, (1 - un) * 8) * Math.min(1, un * 2.5);
-        const w = wave ? wave[(trig + (RES - 1 - j) * step) % wave.length] : 0;
-        const x = X[j] - ty * w * amp * env;
-        const y = Y[j] + tx * w * amp * env;
-        const a = Math.pow(un, 1.7) * 0.7 * tip.weight * intensity;
+        let w = wave ? wave[(trig + (RES - 1 - j) * step) % wave.length] : 0;
+        // energy: hard-clip the waveform into a square-ish, jagged beam
+        if (energy > 0.05) w = Math.max(-1, Math.min(1, w * (1 + energy * 6))) * (1 / (1 + energy * 2));
+        const r = jag ? (Math.random() - 0.5) * jag * env : 0;
+        const x = X[j] - ty * (w * amp * env + r);
+        const y = Y[j] + tx * (w * amp * env + r);
+        const a = Math.pow(un, curve) * alphaK * tip.weight * intensity;
         if (j > 0) b.seg(px, py, pa, x, y, a, tip.weight > 0.8 ? 0.6 : 0.15);
         px = x;
         py = y;

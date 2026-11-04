@@ -18,6 +18,7 @@ import { HandDust } from './handDust.js';
 import { Trails, Strings, LineBatch } from './scope.js';
 import { Particles } from './particles.js';
 import { Orbits } from './orbits.js';
+import { DustField } from './dustField.js';
 import { TIPS } from '../hands.js';
 
 const WHITE = new THREE.Color(0xf2f6f8);
@@ -30,6 +31,7 @@ const FinalShader = {
     uFlash: { value: 0 },
     uGlitch: { value: 0 },
     uGrain: { value: 0.045 },
+    uDepth: { value: 0 },
     uRes: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: /* glsl */ `
@@ -37,7 +39,7 @@ const FinalShader = {
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float uTime, uFlash, uGlitch, uGrain;
+    uniform float uTime, uFlash, uGlitch, uGrain, uDepth;
     uniform vec2 uRes;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -67,14 +69,66 @@ const FinalShader = {
       c = mix(c, vec3(1.0), clamp(uFlash, 0.0, 1.0));
       c += (hash(vUv * uRes + fract(uTime * 13.7) * 91.0) - 0.5) * uGrain;
       vec2 q = vUv - 0.5;
-      c *= 1.0 - dot(q, q) * 0.7;
+      c *= (1.0 - dot(q, q) * (0.7 + 1.6 * uDepth)) * (1.0 - 0.18 * uDepth);
       gl_FragColor = vec4(c, 1.0);
     }`,
 };
 
+/**
+ * Kaleidoscopic symmetry (K): the rendered scene is summed with mirrored /
+ * rotated copies of itself around the screen centre — additive light, so the
+ * hands become a living mandala. 2 = left/right mirror, 4 = both axes,
+ * 6 = three rotations (120°) each with its mirror image.
+ */
+const SymmetryShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uN: { value: 0 },
+    uMix: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform int uN;
+    uniform float uMix;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    vec3 sum; vec3 mx;
+    void tap(vec2 p) {
+      vec2 uv = p / uRes + 0.5;
+      if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return;
+      vec3 c = texture2D(tDiffuse, uv).rgb * 0.72; // copies a little dimmer than the original
+      sum += c; mx = max(mx, c);
+    }
+    vec2 rot(vec2 p, float a) { float c = cos(a), s = sin(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
+    void main() {
+      vec3 base = texture2D(tDiffuse, vUv).rgb;
+      if (uN < 2 || uMix < 0.002) { gl_FragColor = vec4(base, 1.0); return; }
+      vec2 p = (vUv - 0.5) * uRes; // px from centre
+      sum = vec3(0.0); mx = base;
+      if (uN == 2) {
+        tap(vec2(-p.x, p.y));
+      } else if (uN == 4) {
+        tap(vec2(-p.x, p.y)); tap(vec2(p.x, -p.y)); tap(-p);
+      } else {
+        tap(vec2(-p.x, p.y));
+        for (int k = 1; k < 3; k++) {
+          vec2 r = rot(p, float(k) * 2.0943951);
+          tap(r); tap(vec2(-r.x, r.y));
+        }
+      }
+      // max keeps overlaps restrained, a little of the sum keeps it luminous
+      vec3 sym = max(base, mx) + 0.1 * sum;
+      gl_FragColor = vec4(mix(base, sym, uMix), 1.0);
+    }`,
+};
+
 const MODE_LOOK = {
-  theremin: { damp: 0.8, ambient: 0.05, swirl: 0, trails: 1, strings: 1, bloom: 0.7 },
-  pulse: { damp: 0.62, ambient: 0.03, swirl: 0, trails: 0.8, strings: 1, bloom: 0.65 },
+  theremin: { damp: 0.8, ambient: 0.02, swirl: 0, trails: 1, strings: 1, bloom: 0.7 },
+  pulse: { damp: 0.62, ambient: 0.015, swirl: 0, trails: 0.8, strings: 1, bloom: 0.65 },
   drone: { damp: 0.92, ambient: 0.17, swirl: 1, trails: 0.55, strings: 0.6, bloom: 0.85 },
 };
 
@@ -117,6 +171,7 @@ export class Visuals {
     this.camOpacity = 0;
     this.camTarget = 0.05;
 
+    this.dustField = new DustField(this.scene, WHITE, ACCENT);
     this.orbits = new Orbits(this.scene, WHITE, ACCENT);
     this.particles = new Particles(this.scene, WHITE, ACCENT);
     this.strings = new Strings(this.scene, WHITE, ACCENT);
@@ -128,6 +183,10 @@ export class Visuals {
     // post-processing
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.symmetry = new ShaderPass(SymmetryShader);
+    this.composer.addPass(this.symmetry);
+    this.symN = 0;
+    this.symMix = 0;
     this.afterimage = new AfterimagePass(0.8);
     this.composer.addPass(this.afterimage);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.38, 0.12);
@@ -135,6 +194,7 @@ export class Visuals {
     this.final = new ShaderPass(FinalShader);
     this.composer.addPass(this.final);
 
+    this.zoom = 1;
     this.mode = 'theremin';
     this.look = { ...MODE_LOOK.theremin };
     this.time = 0;
@@ -164,11 +224,18 @@ export class Visuals {
     this.camera.bottom = H;
     this.camera.updateProjectionMatrix();
     this.final.uniforms.uRes.value.set(W * this.pxRatio, H * this.pxRatio);
+    this.symmetry.uniforms.uRes.value.set(W, H);
     this.video.classList.add('in-gl');
   }
 
   setMode(mode) {
     this.mode = mode;
+  }
+
+  /** 0 (off), 2, 4 or 6-fold symmetry; new copies fade in. */
+  setSymmetry(n) {
+    this.symN = n;
+    this.symMix = 0;
   }
 
   setCamLevel(l) {
@@ -234,6 +301,16 @@ export class Visuals {
     const L = MODE_LOOK[this.mode];
     for (const k in L) look[k] += (L[k] - look[k]) * (1 - Math.exp(-dt * 2));
     const level = Math.min(1, s.level * 2);
+    const energy = s.ctl.energy || 0;
+    const still = s.ctl.still || 0;
+    const space = s.ctl.space ?? 0.3;
+    // space: spread hands → the whole scene gently zooms out
+    const zt = 1 - 0.16 * Math.max(0, Math.min(1, (space - 0.3) / 0.7));
+    this.zoom += (zt - this.zoom) * (1 - Math.exp(-dt * 3));
+    if (Math.abs(this.camera.zoom - this.zoom) > 1e-4) {
+      this.camera.zoom = this.zoom;
+      this.camera.updateProjectionMatrix();
+    }
     const wave = s.wave;
 
     // ---- camera ghost
@@ -274,13 +351,13 @@ export class Visuals {
           const vx = (x - pv[k * 2]) / Math.max(dt, 1e-3);
           const vy = (y - pv[k * 2 + 1]) / Math.max(dt, 1e-3);
           const sp = Math.hypot(vx, vy);
-          if (sp > 60 && sp < 8000) this.particles.shed(x, y, vx, vy, sp, dt, k === 1 ? 1.4 : 0.7);
+          if (sp > 60 && sp < 8000) this.particles.shed(x, y, vx, vy, sp, dt, (k === 1 ? 1.4 : 0.7) * (0.5 + 2.5 * energy));
         }
         this.prevTips[i][k * 2] = x;
         this.prevTips[i][k * 2 + 1] = y;
       }
     }
-    this.trails.update(tips, wave, level, look.trails);
+    this.trails.update(tips, wave, level, look.trails, { energy, still, length: Math.max(still, space * space) });
 
     // ---- strings between matching fingertips of left + right
     let pairs = null;
@@ -304,6 +381,22 @@ export class Visuals {
       attract.push({ x: p.x, y: p.y, r: 1 });
     }
     this.particles.update(dt, this.pxRatio, W, H, look.ambient * (0.6 + level), look.swirl, attract);
+
+    // ---- reactive 3D dust field: parallax with the hands, flares on hits, pushed by energy
+    let hc = null;
+    if (attract.length) {
+      hc = { x: 0, y: 0 };
+      for (const p of attract) {
+        hc.x += p.x / attract.length;
+        hc.y += p.y / attract.length;
+      }
+    }
+    for (const e of s.events) {
+      if (e.type === 'click') this.dustField.hit(0.45);
+      else if (e.type === 'clap') this.dustField.hit(1);
+      else if (e.type === 'step' && e.sub) this.dustField.hit(0.8);
+    }
+    this.dustField.update(dt, W, H, this.pxRatio, hc, level, energy);
 
     // ---- pulse mode: scan lines and barcode bars on sequencer hits
     for (const e of s.events) {
@@ -338,13 +431,20 @@ export class Visuals {
     // ---- post
     this.flash *= Math.exp(-dt * 14);
     this.glitch *= Math.exp(-dt * 3.2);
+    this.symMix = Math.min(1, this.symMix + dt * 1.5);
+    this.symmetry.uniforms.uN.value = this.symN;
+    this.symmetry.uniforms.uMix.value = this.symN ? this.symMix : 0;
+    this.symmetry.enabled = this.symN > 0;
     const fu = this.final.uniforms;
     fu.uTime.value = t;
     fu.uFlash.value = this.flash;
     fu.uGlitch.value = this.glitch;
     // persistence per frame, made frame-rate independent (tuned at 60 fps)
-    this.afterimage.uniforms.damp.value = Math.pow(look.damp, Math.min(4, dt * 60));
-    this.bloom.strength = look.bloom * (0.85 + level * 0.3);
+    // stillness: longer, softer glow, less bloom, deeper vignette — sinking into depth
+    const damp = look.damp + (0.95 - look.damp) * Math.max(still * 0.7, Math.max(0, space - 0.3) * 0.9);
+    this.afterimage.uniforms.damp.value = Math.pow(damp, Math.min(4, dt * 60));
+    this.bloom.strength = look.bloom * (0.85 + level * 0.3) * (this.symN ? 0.65 : 1) * (1 - 0.3 * still);
+    fu.uDepth.value = still;
 
     this.composer.render(dt);
     this.adapt(dt);

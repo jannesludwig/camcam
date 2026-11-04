@@ -34,9 +34,23 @@ If there's no camera, or you deny permission, AETHER falls back to mouse control
 | **right hand distance** to the camera | timbre: far = pure sine, close = FM + grit |
 | **left hand height** | volume |
 | **left hand x position** | filter: further left = darker |
-| **distance between the hands** | interval of a second voice below the lead (unison, m3, P4, P5, m7, octave) |
+| **distance between the hands** | interval of a second voice below the lead (unison, m3, P4, P5, m7, octave) **and space**: close together = dry, intimate, short trails; spread wide = long dark delay/reverb tail, long afterglow, the scene gently zooms out |
+| **how fast you move** | energy ↔ stillness (see below) |
 
 With only one hand in view, volume and filter rest at a comfortable default.
+
+### Energy ↔ stillness
+
+AETHER measures how fast your hands move.
+
+- **Fast movement** sprays short gated noise bursts and glitch clicks into the
+  sound. The trails turn sharp and jagged, and more dust sheds from the fingertips.
+- **Stillness** builds up over about 3.5 seconds. The tone purifies to a sine
+  and a deep layer two octaves down slowly fades in. The visuals calm down:
+  trails become long, soft and smooth, the glow lengthens and the edges
+  darken. Hold perfectly still and you sink into depth.
+
+The HUD shows `ENERGY`, `STILL` and `SPACE` live.
 
 ## Gestures
 
@@ -63,12 +77,27 @@ With only one hand in view, volume and filter rest at a comfortable default.
 | `S` | scale: free (continuous) → minor pentatonic → dark ("in" scale: 0 1 5 7 8) |
 | `G` | glide amount: tight / soft / slow / long |
 | `C` | camera image: off / ghost (default, almost invisible) / dim |
+| `K` | symmetry: off → 2 → 4 → 6-fold kaleidoscope of all visuals around the centre |
 | `R` | start or stop recording |
 | `M` | mouse mode (move = pitch, click = pinch, scroll = timbre, space = fist) |
 | `X` | clear drone layers |
 | `space` | freeze the current tone |
 | `F` | fullscreen |
 | `H` | help overlay |
+
+All hints and readouts fade out after 5 seconds without keyboard input, so the
+screen is pure visuals while you play. Any key brings them back.
+
+## Visual extras
+
+- **Symmetry (`K`):** hands, trails, strings and particles are mirrored
+  around the centre into a living mandala of light. 2-fold mirrors
+  left/right, 4-fold mirrors both axes, and 6-fold uses three 120° rotations,
+  each with its mirror image.
+- **Reactive dust field:** a very sparse 3D field of tiny grains in the
+  background. It drifts slowly, shifts with parallax as your hands move,
+  flares on clicks and sub hits, and gets pushed outward by fast movement.
+  Barely visible when quiet, alive when playing.
 
 ## Recording
 
@@ -130,7 +159,8 @@ js/pulse.js         Euclidean rhythms
 js/music.js         scales, quantiser, note names
 js/hud.js           data readouts (2D canvas)
 js/recorder.js      MediaRecorder export
-js/visuals/         three.js scene: hand dust, trails + strings, particles, orbits
+js/visuals/         three.js scene: hand dust, trails + strings, particles, orbits,
+                    dust field, symmetry + final post passes
 ```
 
 `window.AETHER` exposes the live state in the console for tuning. The HUD

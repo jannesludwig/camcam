@@ -39,12 +39,13 @@ const app = {
   scaleIdx: 0,
   glideIdx: 1,
   camLevel: 1, // 0 off, 1 almost invisible, 2 dim
+  symmetry: 0, // 0 off, 2, 4, 6-fold
   inputMode: 'none', // 'camera' | 'mouse'
   cameraOk: false,
   everSeen: false,
   lastSeen: -10,
   // latest control values (for HUD / visuals)
-  ctl: { present: false, hz: 110, timbre: 0, volume: 0.7, filter: 0.72, pan: 0, cutoff: 3000, v2: null, motion: 0 },
+  ctl: { present: false, hz: 110, timbre: 0, volume: 0.7, filter: 0.72, pan: 0, cutoff: 3000, v2: null, motion: 0, energy: 0, still: 0, space: 0.3 },
   history: [], // recent {t, hz, timbre} of the lead, to freeze the pre-fist tone
   layers: [], // frozen drone frequencies (mirror of audio.drones)
   pitchMidi: 45,
@@ -149,13 +150,25 @@ function mapControls(hands, t) {
     const iv = INTERVALS[k];
     const ratio = Math.pow(2, -iv.semi / 12) * (iv.semi === 0 ? 1.0035 : 1);
     c.v2 = { on: true, hz: c.hz * ratio, label: iv.label, k };
+    // space: hands close = dry & intimate, spread wide = long dark tail
+    c.space += (clamp01((d - 0.3) / 0.9) - c.space) * 0.12;
   } else {
     c.v2 = null;
+    c.space += (0.3 - c.space) * 0.03; // one hand: relax to a neutral, fairly dry space
   }
 
   // motion energy (drone "air", particles)
   const sp = (R ? R.speed : 0) + (L ? L.speed : 0);
   c.motion += (sp - c.motion) * 0.2;
+
+  // energy ↔ stillness: fast attack / slow release energy; stillness builds
+  // up over ~3.5 s of (nearly) motionless hands and breaks quickly on movement
+  const dt = Math.min(0.1, Math.max(0.001, t - (app.lastCtlT ?? t)));
+  app.lastCtlT = t;
+  const e = clamp01((c.motion - 0.3) / 1.4);
+  c.energy += (e - c.energy) * (e > c.energy ? 0.35 : 0.05);
+  if ((R || L) && c.motion < 0.12) c.still = Math.min(1, c.still + dt / 3.5);
+  else c.still = Math.max(0, c.still - dt * (R || L ? 1.6 : 0.5));
 
   // glide: free mode stays tight (theremin), scale modes use the chosen glide
   const g = GLIDES[app.glideIdx];
@@ -254,6 +267,10 @@ window.AETHER.feed = onTrackingResult; // lets tests inject synthetic hands
 // ------------------------------------------------------------------ render loop
 
 let lastFrame = performance.now();
+// auto-hide: hints + readouts fade out after 5 s without keyboard input
+const IDLE_MS = 5000;
+let lastKey = performance.now();
+let hudFade = 1;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
@@ -268,7 +285,15 @@ function frame(now) {
   const wave = audio.waveform();
 
   visuals?.render(dt, { wave, level: audio.level, ctl: app.ctl, mode: app.mode, events: vEvents, layers: app.layers });
-  hud.draw(hudState(), toScreen);
+  const idle = app.started && app.everSeen && now - lastKey > IDLE_MS && !$('#help').classList.contains('show');
+  hudFade += ((idle ? 0 : 1) - hudFade) * (1 - Math.exp(-dt * (idle ? 1.5 : 8)));
+  document.body.classList.toggle('idle', idle);
+  // HUD markers follow the scene's zoom (space gesture)
+  const z = visuals?.zoom ?? 1;
+  hud.draw(hudState(), z === 1 ? toScreen : (x, y) => {
+    const p = toScreen(x, y);
+    return { x: innerWidth / 2 + (p.x - innerWidth / 2) * z, y: innerHeight / 2 + (p.y - innerHeight / 2) * z };
+  });
   recorder?.frame();
   if (recorder?.recording) $('#rec').textContent = '● REC ' + recorder.elapsed();
 }
@@ -286,6 +311,10 @@ function hudState() {
     hz: c.hz,
     sounding: c.present && c.volume > 0.02,
     timbre: c.timbre,
+    energy: c.energy,
+    still: c.still,
+    space: c.space,
+    fade: hudFade,
     volume: c.volume,
     cutoff: c.cutoff,
     v2: c.v2 && app.mode !== 'pulse' ? c.v2.label : null,
@@ -359,6 +388,7 @@ function setInput(mode) {
 }
 
 addEventListener('keydown', async (e) => {
+  lastKey = performance.now();
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (!app.started) return start();
   const k = e.key.toLowerCase();
@@ -375,6 +405,10 @@ addEventListener('keydown', async (e) => {
   } else if (k === 'c') {
     setCamLevel((app.camLevel + 1) % 3);
     toast('CAMERA ' + ['OFF', 'GHOST', 'DIM'][app.camLevel]);
+  } else if (k === 'k') {
+    app.symmetry = { 0: 2, 2: 4, 4: 6, 6: 0 }[app.symmetry];
+    visuals?.setSymmetry(app.symmetry);
+    toast(app.symmetry ? `SYMMETRY ${app.symmetry}` : 'SYMMETRY OFF');
   } else if (k === 'm') {
     const ok = setInput(app.inputMode === 'mouse' ? 'camera' : 'mouse');
     toast(ok ? 'INPUT ' + app.inputMode.toUpperCase() : 'NO CAMERA');
@@ -434,6 +468,7 @@ async function loadVisuals() {
 async function start() {
   if (app.started) return;
   app.started = true;
+  lastKey = performance.now();
   $('#onboard').classList.add('started');
   await audio.init();
   hint('raise your hands');
