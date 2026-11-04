@@ -233,7 +233,7 @@ function onTrackingResult(res, t) {
       app.everSeen = true;
       audio.swell(1);
       visuals?.materialize(1);
-      hint('');
+      if (app.inputMode === 'camera') hint('');
     } else if (t - app.lastSeen > 4) {
       // hands come back after a while: smaller swell, faster materialisation
       audio.swell(0.35);
@@ -340,6 +340,7 @@ function setCamLevel(l) {
   visuals?.setCamLevel(l);
 }
 
+/** Switch between camera and mouse input. Returns false if not possible. */
 function setInput(mode) {
   if (mode === 'mouse') {
     app.inputMode = 'mouse';
@@ -347,13 +348,14 @@ function setInput(mode) {
     mouse.enable();
     stage.classList.add('mouse');
   } else {
-    if (!app.cameraOk) return toast('NO CAMERA');
+    if (!app.cameraOk || !tracker.landmarker) return false;
     app.inputMode = 'camera';
     mouse.disable();
     stage.classList.remove('mouse');
     tracker.start();
   }
   processor.slots.forEach((s) => (s.present = false));
+  return true;
 }
 
 addEventListener('keydown', async (e) => {
@@ -374,8 +376,8 @@ addEventListener('keydown', async (e) => {
     setCamLevel((app.camLevel + 1) % 3);
     toast('CAMERA ' + ['OFF', 'GHOST', 'DIM'][app.camLevel]);
   } else if (k === 'm') {
-    setInput(app.inputMode === 'mouse' ? 'camera' : 'mouse');
-    toast('INPUT ' + app.inputMode.toUpperCase());
+    const ok = setInput(app.inputMode === 'mouse' ? 'camera' : 'mouse');
+    toast(ok ? 'INPUT ' + app.inputMode.toUpperCase() : 'NO CAMERA');
   } else if (k === 'h' || k === '?') {
     $('#help').classList.toggle('show');
   } else if (k === 'escape') {

@@ -172,7 +172,7 @@ export class Visuals {
   }
 
   setCamLevel(l) {
-    this.camTarget = [0, 0.06, 0.22][l];
+    this.camTarget = [0, 0.06, 0.16][l];
   }
 
   /** Called by the app on the first appearance of hands (slow, dramatic). */
