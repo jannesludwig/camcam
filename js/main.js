@@ -67,7 +67,7 @@ const mouse = new MouseHand(stage);
 let visuals = null; // WebGL visuals, loaded lazily (see boot)
 let recorder = null;
 
-window.AETHER = { app, audio, processor, gestures }; // for debugging in the console
+window.AETHER = { app, audio, processor, gestures, MouseHand }; // for debugging in the console
 
 // ------------------------------------------------------------------ geometry
 
@@ -287,7 +287,7 @@ function hudState() {
     timbre: c.timbre,
     volume: c.volume,
     cutoff: c.cutoff,
-    v2: c.v2 ? c.v2.label : null,
+    v2: c.v2 && app.mode !== 'pulse' ? c.v2.label : null,
     hands: app.hands,
     layers: app.layers,
     range: RANGES[app.mode],
@@ -417,7 +417,7 @@ $('#help-close').addEventListener('click', () => $('#help').classList.remove('sh
 async function loadVisuals() {
   try {
     const { Visuals } = await import('./visuals/visuals.js');
-    visuals = new Visuals($('#gl'), video, { toScreen: () => fit });
+    visuals = new Visuals($('#gl'), video, toScreen);
     visuals.setMode(app.mode);
     visuals.setCamLevel(app.camLevel);
     hud.drawSkeleton = false;

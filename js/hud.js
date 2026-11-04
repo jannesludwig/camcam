@@ -130,7 +130,7 @@ export class Hud {
     }
 
     // ---- pulse step grid
-    if (s.mode === 'pulse' && s.grid) this.drawGrid(s);
+    if (s.mode === 'pulse' && s.grid && s.grid.clicks) this.drawGrid(s);
   }
 
   drawRuler(s) {
