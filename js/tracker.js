@@ -181,8 +181,11 @@ export class MouseHand {
 
   /** Build a HandLandmarker-like result for time t (seconds). Already mirrored. */
   result(t) {
-    this.pinchAmt += ((this.down ? 1 : 0) - this.pinchAmt) * 0.6;
-    this.fistAmt += ((this.fist ? 1 : 0) - this.fistAmt) * 0.3;
+    // frame-rate independent easing of the gesture poses
+    const dt = Math.min(0.1, Math.max(0.001, t - (this._t ?? t - 1 / 60)));
+    this._t = t;
+    this.pinchAmt += ((this.down ? 1 : 0) - this.pinchAmt) * (1 - Math.exp(-dt * 55));
+    this.fistAmt += ((this.fist ? 1 : 0) - this.fistAmt) * (1 - Math.exp(-dt * 22));
     const s = this.scale;
     // palm centre ≈ 0.55 units above the wrist; anchor the pointer on the palm
     const wx = this.x;
